@@ -1,3 +1,7 @@
+# Reports directory
+reports/
+mysql_perf_metrics/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
