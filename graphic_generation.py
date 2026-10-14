@@ -61,6 +61,7 @@ def generate_graphics(json_path, server_num, timestamp):
         plt.close()
 
         print(f"Graphics saved to {CHARTS_DIR}")
+        return [chart1_path, chart2_path]
 
     except Exception as e:
         print(f"Failed to generate graphics: {e}")

@@ -21,5 +21,10 @@ DB_USER = os.getenv("DB_USER", "root")
 DB_PASS = os.getenv("DB_PASSWORD", "")
 DB_NAME = os.getenv("DB_NAME", "slow_query_history")
 
-# --- Server selection ---
-TARGET_SERVER = os.getenv("TARGET_SERVER", "1")
+# --- Google Drive Configuration ---
+TOKEN_FILE = os.getenv('GOOGLE_TOKEN_FILE', '')
+BASE_DRIVE_FOLDER_ID = os.getenv('BASE_DRIVE_FOLDER_ID', '')
+SERVER_FOLDERS = {
+    "1": os.getenv("DRIVE_FOLDER_BBDD1", ""),
+    "2": os.getenv("DRIVE_FOLDER_BBDD2", "")
+}

@@ -2,6 +2,9 @@
 reports/
 mysql_perf_metrics/
 
+#OAuth google
+*.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
