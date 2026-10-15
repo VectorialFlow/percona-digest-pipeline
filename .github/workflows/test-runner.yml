@@ -1,4 +1,4 @@
-name: Test ARC Runner
+name: Test Direct Local Runner
 
 on:
   push:
@@ -8,9 +8,9 @@ on:
 
 jobs:
   test-job:
-    runs-on: arc-runner-set
+    runs-on: [self-hosted, mk8s]
     steps:
-      - name: Hello from local Kubernetes
+      - name: Hello from local server
         run: |
-          echo "Successfully running on local Kubernetes runner!"
+          echo "Successfully running directly on local server via custom label!"
           hostname
