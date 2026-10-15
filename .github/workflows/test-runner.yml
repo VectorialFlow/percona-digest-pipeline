@@ -1,0 +1,13 @@
+name: Test ARC Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-job:
+    runs-on: arc-runner-set
+    steps:
+      - name: Hello from local Kubernetes
+        run: |
+          echo "Successfully running on local Kubernetes runner!"
+          hostname
