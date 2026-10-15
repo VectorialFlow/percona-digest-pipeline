@@ -1,6 +1,9 @@
 name: Test ARC Runner
 
 on:
+  push:
+    branches:
+      - feat/ci-cd-implementation
   workflow_dispatch:
 
 jobs:
