@@ -7,10 +7,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-job:
+  deploy-job:
     runs-on: [self-hosted, mk8s]
     steps:
-      - name: Hello from local server
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Verify kubectl access on MicroK8s
         run: |
-          echo "Successfully running directly on local server via custom label!"
-          hostname
+          echo "Running as user: $(whoami) on host: $(hostname)"
+          which kubectl
+          kubectl get namespaces
+          kubectl get pods -A
