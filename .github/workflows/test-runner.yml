@@ -1,4 +1,4 @@
-name: Test Direct Local Runner
+name: Verify Ephemeral ARC Runner
 
 on:
   push:
@@ -7,15 +7,20 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy-job:
-    runs-on: [self-hosted, mk8s]
+  verify-cluster-access:
+    runs-on: mk8s-org-runner
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Verify kubectl access on MicroK8s
+      - name: Verify Docker-in-Docker sidecar
         run: |
-          echo "Running as user: $(whoami) on host: $(hostname)"
+          echo "Checking isolated Docker daemon..."
+          docker version
+
+      - name: Verify native MicroK8s API access via ServiceAccount
+        run: |
+          echo "Running as user: $(whoami) inside ephemeral pod: $(hostname)"
           which kubectl
           kubectl get namespaces
           kubectl get pods -A
