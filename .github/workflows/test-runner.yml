@@ -1,26 +1,64 @@
-name: Verify Ephemeral ARC Runner
+name: Build, Secure and Deploy Percona Digest CronJob
 
 on:
   push:
     branches:
+      - main
+      - staging
       - feat/ci-cd-implementation
   workflow_dispatch:
 
+env:
+  REGISTRY_PUSH_HOST: registry.container-registry.svc.cluster.local:5000
+  REGISTRY_PULL_HOST: localhost:32000
+  IMAGE_NAME: percona-digest-pipeline
+
 jobs:
-  verify-cluster-access:
+  build-and-deploy:
     runs-on: mk8s-org-runner
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Verify Docker-in-Docker sidecar
+      - name: Set target environment and image tag based on branch
+        id: vars
         run: |
-          echo "Checking isolated Docker daemon..."
-          docker version
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "TARGET_NS=vf-prod" >> $GITHUB_OUTPUT
+            echo "IMAGE_TAG=latest" >> $GITHUB_OUTPUT
+          else
+            echo "TARGET_NS=vf-staging" >> $GITHUB_OUTPUT
+            echo "IMAGE_TAG=staging" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Verify native MicroK8s API access via ServiceAccount
+      - name: Create Kubernetes Secret from GitHub Secrets
         run: |
-          echo "Running as user: $(whoami) inside ephemeral pod: $(hostname)"
-          which kubectl
-          kubectl get namespaces
-          kubectl get pods -A
+          # Ensure secrets directory exists
+          mkdir -p secrets
+          
+          # Inject Google Drive credentials from GitHub Secrets into a physical file
+          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > secrets/credentials.json
+
+          # Apply or update the Kubernetes Secret inside the target namespace
+          kubectl create secret generic percona-gdrive-secret \
+            --namespace=${{ steps.vars.outputs.TARGET_NS }} \
+            --from-file=credentials.json=secrets/credentials.json \
+            --dry-run=client -o yaml | kubectl apply -f -
+            
+          # Clean up local secret file immediately
+          rm -rf secrets/
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.REGISTRY_PUSH_HOST }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.IMAGE_TAG }} .
+
+      - name: Push image to MicroK8s internal registry
+        run: |
+          docker push ${{ env.REGISTRY_PUSH_HOST }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.IMAGE_TAG }}
+
+      - name: Deploy CronJob to MicroK8s (${{ steps.vars.outputs.TARGET_NS }})
+        run: |
+          sed "s/IMAGE_TAG_PLACEHOLDER/${{ steps.vars.outputs.IMAGE_TAG }}/g" k8s/cronjob.yaml | \
+          kubectl apply -n ${{ steps.vars.outputs.TARGET_NS }} -f -
+
+          echo "Deployment completed successfully for namespace: ${{ steps.vars.outputs.TARGET_NS }}"
