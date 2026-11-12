@@ -54,12 +54,17 @@ jobs:
             
           rm -rf secrets/
 
+      - name: Set up Python for PyArmor
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Obfuscate Python code with PyArmor
         run: |
           pip install --quiet pyarmor
 
           pyarmor gen --output dist *.py
-          
+
           cp -r dist/* .
           rm -rf dist
 
