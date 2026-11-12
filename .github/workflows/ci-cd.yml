@@ -57,8 +57,9 @@ jobs:
       - name: Obfuscate Python code with PyArmor
         run: |
           pip install --quiet pyarmor
-          # Replace 'main.py' and 'mysql_perf_metrics/' with your exact script names/directories
-          pyarmor gen --output dist main.py mysql_perf_metrics/
+
+          pyarmor gen --output dist *.py
+          
           cp -r dist/* .
           rm -rf dist
 
