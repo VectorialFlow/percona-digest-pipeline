@@ -12,3 +12,6 @@ venv/
 mysql_perf_metrics/
 downloads/
 *.log
+dist
+secrets
+.github

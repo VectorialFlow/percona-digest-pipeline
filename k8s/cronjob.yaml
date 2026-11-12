@@ -19,9 +19,11 @@ spec:
             app: percona-digest-pipeline
         spec:
           restartPolicy: Never
+          imagePullSecrets:
+            - name: ghcr-secret
           containers:
             - name: percona-analyzer
-              image: localhost:32000/percona-digest-pipeline:IMAGE_TAG_PLACEHOLDER
+              image: IMAGE_TAG_PLACEHOLDER
               imagePullPolicy: Always
               resources:
                 requests:

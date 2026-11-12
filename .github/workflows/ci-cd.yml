@@ -9,13 +9,14 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY_PUSH_HOST: registry.container-registry.svc.cluster.local:5000
-  REGISTRY_PULL_HOST: localhost:32000
-  IMAGE_NAME: percona-digest-pipeline
+  REGISTRY: ghcr.io
 
 jobs:
   build-and-deploy:
     runs-on: mk8s-org-runner
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout repository code
         uses: actions/checkout@v4
@@ -31,34 +32,42 @@ jobs:
             echo "IMAGE_TAG=staging" >> $GITHUB_OUTPUT
           fi
 
+          IMAGE_ID=$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_OUTPUT
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create Kubernetes Secret from GitHub Secrets
         run: |
-          # Ensure secrets directory exists
           mkdir -p secrets
-          
-          # Inject Google Drive credentials from GitHub Secrets into a physical file
           echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > secrets/credentials.json
 
-          # Apply or update the Kubernetes Secret inside the target namespace
           kubectl create secret generic percona-gdrive-secret \
             --namespace=${{ steps.vars.outputs.TARGET_NS }} \
             --from-file=credentials.json=secrets/credentials.json \
             --dry-run=client -o yaml | kubectl apply -f -
             
-          # Clean up local secret file immediately
           rm -rf secrets/
 
-      - name: Build Docker image
+      - name: Obfuscate Python code with PyArmor
         run: |
-          docker build -t ${{ env.REGISTRY_PUSH_HOST }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.IMAGE_TAG }} .
+          pip install --quiet pyarmor
+          # Replace 'main.py' and 'mysql_perf_metrics/' with your exact script names/directories
+          pyarmor gen --output dist main.py mysql_perf_metrics/
+          cp -r dist/* .
+          rm -rf dist
 
-      - name: Push image to MicroK8s internal registry
+      - name: Build and push Docker image
         run: |
-          docker push ${{ env.REGISTRY_PUSH_HOST }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.IMAGE_TAG }}
+          docker build -t ${{ steps.vars.outputs.IMAGE_ID }}:${{ steps.vars.outputs.IMAGE_TAG }} .
+          docker push ${{ steps.vars.outputs.IMAGE_ID }}:${{ steps.vars.outputs.IMAGE_TAG }}
 
-      - name: Deploy CronJob to MicroK8s (${{ steps.vars.outputs.TARGET_NS }})
+      - name: Deploy CronJob to MicroK8s
         run: |
-          sed "s/IMAGE_TAG_PLACEHOLDER/${{ steps.vars.outputs.IMAGE_TAG }}/g" k8s/cronjob.yaml | \
+          sed "s|IMAGE_TAG_PLACEHOLDER|${{ steps.vars.outputs.IMAGE_ID }}:${{ steps.vars.outputs.IMAGE_TAG }}|g" k8s/cronjob.yaml | \
           kubectl apply -n ${{ steps.vars.outputs.TARGET_NS }} -f -
-
-          echo "Deployment completed successfully for namespace: ${{ steps.vars.outputs.TARGET_NS }}"
