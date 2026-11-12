@@ -22,4 +22,4 @@ COPY . .
 
 RUN mkdir -p /app/mysql_perf_metrics/reports /app/mysql_perf_metrics/charts
 
-ENTRYPOINT ["python", "main.py"]
+ENTRYPOINT ["python", "metric_graphic_generation.py"]
