@@ -15,3 +15,5 @@ downloads/
 dist
 secrets
 .github
+credentials.json
+token.json
