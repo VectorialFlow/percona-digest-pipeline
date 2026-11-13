@@ -12,6 +12,30 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  setup:
+    runs-on: mk8s-org-runner
+    outputs:
+      target_ns: ${{ steps.vars.outputs.TARGET_NS }}
+      image_tag: ${{ steps.vars.outputs.IMAGE_TAG }}
+      image_id: ${{ steps.vars.outputs.IMAGE_ID }}
+      environment: ${{ steps.vars.outputs.ENVIRONMENT }}
+    steps:
+      - name: Set target environment and image tag based on branch
+        id: vars
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "TARGET_NS=vf-prod" >> $GITHUB_OUTPUT
+            echo "IMAGE_TAG=latest" >> $GITHUB_OUTPUT
+            echo "ENVIRONMENT=production" >> $GITHUB_OUTPUT
+          else
+            echo "TARGET_NS=vf-staging" >> $GITHUB_OUTPUT
+            echo "IMAGE_TAG=staging" >> $GITHUB_OUTPUT
+            echo "ENVIRONMENT=staging" >> $GITHUB_OUTPUT
+          fi
+
+          IMAGE_ID=$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_OUTPUT
+
   build-and-deploy:
     runs-on: mk8s-org-runner
     permissions:
@@ -21,20 +45,6 @@ jobs:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Set target environment and image tag based on branch
-        id: vars
-        run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            echo "TARGET_NS=vf-prod" >> $GITHUB_OUTPUT
-            echo "IMAGE_TAG=latest" >> $GITHUB_OUTPUT
-          else
-            echo "TARGET_NS=vf-staging" >> $GITHUB_OUTPUT
-            echo "IMAGE_TAG=staging" >> $GITHUB_OUTPUT
-          fi
-
-          IMAGE_ID=$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_OUTPUT
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -42,14 +52,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.CR_PAT }}
 
-      - name: Create Kubernetes Secret from GitHub Secrets
+      - name: Create Kubernetes Secrets from GitHub Secrets & Variables
         run: |
           mkdir -p secrets
           echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > secrets/credentials.json
+          echo "${{ secrets.GOOGLE_TOKEN_JSON }}" > secrets/token.json
 
           kubectl create secret generic percona-gdrive-secret \
-            --namespace=${{ steps.vars.outputs.TARGET_NS }} \
+            --namespace=${{ needs.setup.outputs.target_ns }} \
             --from-file=credentials.json=secrets/credentials.json \
+            --from-file=token.json=secrets/token.json \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret generic percona-app-env \
+            --namespace=${{ needs.setup.outputs.target_ns }} \
+            --from-literal=NAS_URL="${{ secrets.NAS_URL }}" \
+            --from-literal=BASE_DRIVE_FOLDER_ID="${{ secrets.BASE_DRIVE_FOLDER_ID }}" \
+            --from-literal=DRIVE_FOLDER_BBDD1="${{ secrets.DRIVE_FOLDER_BBDD1 }}" \
+            --from-literal=DRIVE_FOLDER_BBDD2="${{ secrets.DRIVE_FOLDER_BBDD2 }}" \
+            --from-literal=GOOGLE_TOKEN_FILE="token.json" \
             --dry-run=client -o yaml | kubectl apply -f -
             
           rm -rf secrets/
@@ -57,23 +78,21 @@ jobs:
       - name: Set up Python for PyArmor
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Obfuscate Python code with PyArmor
         run: |
           pip install --quiet pyarmor
-
           pyarmor gen --output dist *.py
-
           cp -r dist/* .
           rm -rf dist
 
       - name: Build and push Docker image
         run: |
-          docker build -t ${{ steps.vars.outputs.IMAGE_ID }}:${{ steps.vars.outputs.IMAGE_TAG }} .
-          docker push ${{ steps.vars.outputs.IMAGE_ID }}:${{ steps.vars.outputs.IMAGE_TAG }}
+          docker build -t ${{ needs.setup.outputs.image_id }}:${{ needs.setup.outputs.image_tag }} .
+          docker push ${{ needs.setup.outputs.image_id }}:${{ needs.setup.outputs.image_tag }}
 
       - name: Deploy CronJob to MicroK8s
         run: |
-          sed "s|IMAGE_TAG_PLACEHOLDER|${{ steps.vars.outputs.IMAGE_ID }}:${{ steps.vars.outputs.IMAGE_TAG }}|g" k8s/cronjob.yaml | \
-          kubectl apply -n ${{ steps.vars.outputs.TARGET_NS }} -f -
+          sed "s|IMAGE_TAG_PLACEHOLDER|${{ needs.setup.outputs.image_id }}:${{ needs.setup.outputs.image_tag }}|g" k8s/cronjob.yaml | \
+          kubectl apply -n ${{ needs.setup.outputs.target_ns }} -f -
