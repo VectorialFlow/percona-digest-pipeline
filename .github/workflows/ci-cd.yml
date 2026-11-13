@@ -37,6 +37,7 @@ jobs:
           echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_OUTPUT
 
   build-and-deploy:
+    needs: setup
     runs-on: mk8s-org-runner
     permissions:
       contents: read
