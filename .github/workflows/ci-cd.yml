@@ -39,6 +39,7 @@ jobs:
   build-and-deploy:
     needs: setup
     runs-on: mk8s-org-runner
+    environment: ${{ needs.setup.outputs.environment }}
     permissions:
       contents: read
       packages: write
