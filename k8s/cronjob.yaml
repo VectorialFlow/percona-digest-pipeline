@@ -25,6 +25,9 @@ spec:
             - name: percona-analyzer
               image: IMAGE_TAG_PLACEHOLDER
               imagePullPolicy: Always
+              command: ["/bin/sh", "-c"]
+              args:
+                - cp /app/secrets/credentials.json /app/credentials.json && cp /app/secrets/token.json /app/token.json && python metric_graphic_generation.py
               resources:
                 requests:
                   cpu: "100m"
@@ -37,7 +40,7 @@ spec:
                     name: percona-app-env
               env:
                 - name: GOOGLE_APPLICATION_CREDENTIALS
-                  value: "/app/secrets/credentials.json"
+                  value: "/app/credentials.json"
               volumeMounts:
                 - name: gdrive-secret-volume
                   mountPath: /app/secrets
